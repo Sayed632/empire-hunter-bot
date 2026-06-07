@@ -12,7 +12,7 @@ MY_CHAT_ID = os.getenv('MY_CHAT_ID')
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
 LOGIN_URL = "https://www.screener.in/login/"
-RUN_QUERY_URL = "https://www.screener.in/api/v1/screen/raw/"
+RUN_QUERY_URL = "https://www.screener.in/screen/raw/"
 
 # --- QUERIES DEFINITION ---
 QUERIES = {
@@ -38,10 +38,17 @@ QUERIES = {
     )
 }
 
-def parse_screener_query(session, query_string):
-    """Submits raw query text directly to screener execution parser engines."""
+def parse_screener_query(session, csrf_token, query_string):
+    """Submits the query text using standard form variables to avoid blank table blocks."""
     try:
-        response = session.get(RUN_QUERY_URL, params={'q': query_string})
+        # Form submission layout matching Screener's official schema
+        form_data = {
+            'csrfmiddlewaretoken': csrf_token,
+            'query': query_string
+        }
+        
+        # We must use POST to pass the search string through the screening engine
+        response = session.post(RUN_QUERY_URL, data=form_data, headers={'Referer': RUN_QUERY_URL})
         if response.status_code != 200:
             return []
             
@@ -50,9 +57,9 @@ def parse_screener_query(session, query_string):
         if not table:
             return []
             
-        rows = table.find_all('tr')[1:] # Skip headers
+        rows = table.find_all('tr')[1:]  # Drops table structural header row
         stocks = []
-        for row in rows[:12]: # Cap output at top 12 matches per screen
+        for row in rows[:15]:  # Capture top 15 matches 
             cols = row.find_all('td')
             if len(cols) > 2:
                 name = cols[1].text.strip().replace('\n', '').split('  ')[0]
@@ -60,21 +67,21 @@ def parse_screener_query(session, query_string):
                 stocks.append(f"🔹 **{name}** - CMP: ₹{price}")
         return stocks
     except Exception as e:
-        print(f"Error fetching data query elements: {str(e)}")
+        print(f"Error compiling table structure elements: {str(e)}")
         return []
 
 def run_screener_automation():
-    print("🔒 Creating secure terminal session on Screener.in...")
+    print("🔒 Logging into your custom Screener.in workspace...")
     session = requests.Session()
     session.headers.update({
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     })
     
-    # Authenticate and login to retrieve session cookies
     try:
-        login_page = session.get(LOGIN_URL)
-        soup = BeautifulSoup(login_page.text, 'html.parser')
-        csrf_token = soup.find('input', {'name': 'csrfmiddlewaretoken'})['value']
+        # Initialize token parameter handshakes
+        login_init = session.get(LOGIN_URL)
+        init_soup = BeautifulSoup(login_init.text, 'html.parser')
+        csrf_token = init_soup.find('input', {'name': 'csrfmiddlewaretoken'})['value']
         
         payload = {
             'username': USERNAME,
@@ -84,18 +91,23 @@ def run_screener_automation():
         post_response = session.post(LOGIN_URL, data=payload, headers={'Referer': LOGIN_URL})
         
         if "logout" not in post_response.text.lower():
-            print("❌ Authentication failed. Verify account secrets variables.")
+            print("❌ Authentication failed. Re-verify saved secrets parameters.")
             return
+            
+        # Get a fresh CSRF token from the query runner interface for data scraping authorization
+        query_page_init = session.get(RUN_QUERY_URL)
+        query_soup = BeautifulSoup(query_page_init.text, 'html.parser')
+        session_csrf = query_soup.find('input', {'name': 'csrfmiddlewaretoken'})['value']
+        
     except Exception as e:
-        print(f"Connection failure to logging service: {str(e)}")
+        print(f"Connection failure to logging engine: {str(e)}")
         return
 
-    print("✅ Login active. Scanning data metrics...")
+    print("✅ Session secured! Filtering your stock matrices...")
     
-    # Process both queries sequentially
     for screen_name, text_query in QUERIES.items():
-        print(f"Running profile scan for: {screen_name}")
-        hits = parse_screener_query(session, text_query)
+        print(f"Processing structural layout logic for: {screen_name}")
+        hits = parse_screener_query(session, session_csrf, text_query)
         
         if hits:
             message_payload = f"🔥 **{screen_name}** 🔥\n\n" + "\n".join(hits)
