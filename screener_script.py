@@ -38,47 +38,53 @@ QUERIES = {
     )
 }
 
-def parse_screener_query(session, csrf_token, query_string):
-    """Submits the query text using standard form variables to avoid blank table blocks."""
+def parse_screener_query(session, query_string):
+    """Submits search constraints via the browser-aligned GET query model to bypass blank screens."""
     try:
-        # Form submission layout matching Screener's official schema
-        form_data = {
-            'csrfmiddlewaretoken': csrf_token,
-            'query': query_string
+        # Match browser query format parameters explicitly
+        params = {
+            'page': '1',
+            'q': query_string
         }
         
-        # We must use POST to pass the search string through the screening engine
-        response = session.post(RUN_QUERY_URL, data=form_data, headers={'Referer': RUN_QUERY_URL})
+        response = session.get(RUN_QUERY_URL, params=params)
         if response.status_code != 200:
+            print(f"Server rejection status code: {response.status_code}")
             return []
             
         soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Pull HTML table elements out of the Screener card container
         table = soup.find('table', {'class': 'data-table'})
         if not table:
+            print("Could not locate data table row containers on output page wrapper.")
             return []
             
-        rows = table.find_all('tr')[1:]  # Drops table structural header row
+        rows = table.find_all('tr')[1:]  # Drops table header row tracking parameters
         stocks = []
-        for row in rows[:15]:  # Capture top 15 matches 
+        for row in rows[:15]:  # Capture top 15 target hits
             cols = row.find_all('td')
             if len(cols) > 2:
+                # Isolate target stock name and Current Market Price data indices
                 name = cols[1].text.strip().replace('\n', '').split('  ')[0]
                 price = cols[2].text.strip()
                 stocks.append(f"🔹 **{name}** - CMP: ₹{price}")
         return stocks
     except Exception as e:
-        print(f"Error compiling table structure elements: {str(e)}")
+        print(f"Error parsing raw table text elements: {str(e)}")
         return []
 
 def run_screener_automation():
-    print("🔒 Logging into your custom Screener.in workspace...")
+    print("🔒 Building a secure scraping session tunnel to Screener.in...")
     session = requests.Session()
     session.headers.update({
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5'
     })
     
     try:
-        # Initialize token parameter handshakes
+        # Extract the anti-forgery verification tokens from login DOM elements
         login_init = session.get(LOGIN_URL)
         init_soup = BeautifulSoup(login_init.text, 'html.parser')
         csrf_token = init_soup.find('input', {'name': 'csrfmiddlewaretoken'})['value']
@@ -88,31 +94,27 @@ def run_screener_automation():
             'password': PASSWORD,
             'csrfmiddlewaretoken': csrf_token
         }
+        # Execute validation authorization handshake
         post_response = session.post(LOGIN_URL, data=payload, headers={'Referer': LOGIN_URL})
         
         if "logout" not in post_response.text.lower():
-            print("❌ Authentication failed. Re-verify saved secrets parameters.")
+            print("❌ Authentication failed. Re-verify account credential secrets.")
             return
             
-        # Get a fresh CSRF token from the query runner interface for data scraping authorization
-        query_page_init = session.get(RUN_QUERY_URL)
-        query_soup = BeautifulSoup(query_page_init.text, 'html.parser')
-        session_csrf = query_soup.find('input', {'name': 'csrfmiddlewaretoken'})['value']
-        
     except Exception as e:
-        print(f"Connection failure to logging engine: {str(e)}")
+        print(f"Connection failure to logging routing services: {str(e)}")
         return
 
-    print("✅ Session secured! Filtering your stock matrices...")
+    print("✅ Authenticated! Running your screen criteria profiles...")
     
     for screen_name, text_query in QUERIES.items():
-        print(f"Processing structural layout logic for: {screen_name}")
-        hits = parse_screener_query(session, session_csrf, text_query)
+        print(f"Scanning metrics for system block: {screen_name}")
+        hits = parse_screener_query(session, text_query)
         
         if hits:
             message_payload = f"🔥 **{screen_name}** 🔥\n\n" + "\n".join(hits)
             bot.send_message(MY_CHAT_ID, message_payload, parse_mode='Markdown')
-            print(f"🚀 Telegram package shipped for {screen_name}")
+            print(f"🚀 Telegram update shipped for {screen_name}")
         else:
             bot.send_message(MY_CHAT_ID, f"📋 **{screen_name}**\n\nNo stock triggers met criteria today.")
             print(f"📁 Scan finished: 0 hits for {screen_name}")
