@@ -1,19 +1,19 @@
-name: Run Empire Bot Daily
+name: Run Screener Filter Automation
 
 on:
   schedule:
-    - cron: '15 4 * * 1-5'
+    - cron: '30 4 * * 1-5'  # Runs Mon-Fri at 10:00 AM IST
   workflow_dispatch:
 
 jobs:
-  run-bot:
+  run-screener:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repository Code
+    - name: Checkout Code
       uses: actions/checkout@v6
 
-    - name: Set up Python Environment
+    - name: Set up Python
       uses: actions/setup-python@v6
       with:
         python-version: '3.10'
@@ -21,12 +21,13 @@ jobs:
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        pip install requests beautifulsoup4 pyTelegramBotAPI
 
-    - name: Execute Screener and Telegram Bot
+    - name: Execute Screener Filter Script
       env:
-        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        MY_CHAT_ID: ${{ secrets.MY_CHAT_ID }}
+        SCREENER_USERNAME: ${{ secrets.SCREENER_USERNAME }}
+        SCREENER_PASSWORD: ${{ secrets.SCREENER_PASSWORD }}
         TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-      run: python main.py
+        MY_CHAT_ID: ${{ secrets.MY_CHAT_ID }}
+      run: python screener_script.py
       
