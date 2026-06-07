@@ -39,9 +39,9 @@ QUERIES = {
 }
 
 def parse_screener_query(session, query_string):
-    """Submits search constraints via the browser-aligned GET query model to bypass blank screens."""
+    """Submits search constraints via the browser-aligned GET query model."""
     try:
-        # Match browser query format parameters explicitly
+        # Match browser query parameters explicitly
         params = {
             'page': '1',
             'q': query_string
@@ -54,19 +54,20 @@ def parse_screener_query(session, query_string):
             
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Pull HTML table elements out of the Screener card container
+        # Isolate the data table container
         table = soup.find('table', {'class': 'data-table'})
         if not table:
-            print("Could not locate data table row containers on output page wrapper.")
+            print("Could not locate data table. Check if query format contains structural bugs.")
             return []
             
-        rows = table.find_all('tr')[1:]  # Drops table header row tracking parameters
+        rows = table.find_all('tr')[1:]  # Drops table header row
         stocks = []
         for row in rows[:15]:  # Capture top 15 target hits
             cols = row.find_all('td')
             if len(cols) > 2:
-                # Isolate target stock name and Current Market Price data indices
-                name = cols[1].text.strip().replace('\n', '').split('  ')[0]
+                # Isolate target stock name and link text elements
+                name_element = cols[1].find('a')
+                name = name_element.text.strip() if name_element else cols[1].text.strip()
                 price = cols[2].text.strip()
                 stocks.append(f"🔹 **{name}** - CMP: ₹{price}")
         return stocks
@@ -80,11 +81,12 @@ def run_screener_automation():
     session.headers.update({
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5'
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Upgrade-Insecure-Requests': '1'
     })
     
     try:
-        # Extract the anti-forgery verification tokens from login DOM elements
+        # Extract anti-forgery verification tokens from login DOM elements
         login_init = session.get(LOGIN_URL)
         init_soup = BeautifulSoup(login_init.text, 'html.parser')
         csrf_token = init_soup.find('input', {'name': 'csrfmiddlewaretoken'})['value']
@@ -94,10 +96,12 @@ def run_screener_automation():
             'password': PASSWORD,
             'csrfmiddlewaretoken': csrf_token
         }
+        
         # Execute validation authorization handshake
         post_response = session.post(LOGIN_URL, data=payload, headers={'Referer': LOGIN_URL})
         
-        if "logout" not in post_response.text.lower():
+        # Double check login success by looking for dashboard elements
+        if "login" in post_response.url or "logout" not in post_response.text.lower():
             print("❌ Authentication failed. Re-verify account credential secrets.")
             return
             
